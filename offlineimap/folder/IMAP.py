@@ -509,8 +509,8 @@ class IMAPFolder(BaseFolder):
 
         It will use information in the following order, falling back as an
         attempt fails:
-          - rtime parameter
           - Date header of email
+          - rtime parameter
 
         We return None, if we couldn't find a valid date. In this case
         the IMAP server will use the server local time when appening
@@ -529,17 +529,27 @@ class IMAPFolder(BaseFolder):
         ASCII. However, imaplib.Time2INternaldate currently returns a
         string so we go with the same for now.
 
-        :param rtime: epoch timestamp to be used rather than analyzing
-                  the email.
+        :param rtime: epoch timestamp to be used as a fallback 
+                  from analyzing the email.
         :returns: string in the form of "DD-Mmm-YYYY HH:MM:SS +HHMM"
                   (including double quotes) or `None` in case of failure
                   (which is fine as value for append)."""
 
-        if rtime is None:
-            rtime = emailutil.get_message_date(content)
-            if rtime == None:
+        # WIP.chc flip rtime vs email time
+
+        # Prefer the timestamp based on the email's Date header;
+        # The Maildir folder implementation passes an rtime based on 
+        # the filesystem mtime, so the Date header is better information
+        # about when the email was actually sent. This particularly matters
+        # for Gmail, which erases the message's Date header in favor of
+        # the provided INTERNALDATE. 
+        email_time = emailutil.get_message_date(content)
+        if email_time is None:
+            # fall back to the rtime param if passed
+            email_time = rtime
+            if email_time == None:
                 return None
-        datetuple = time.localtime(rtime)
+        datetuple = time.localtime(email_time)
 
         try:
             # Check for invalid dates.
@@ -577,6 +587,7 @@ class IMAPFolder(BaseFolder):
             (datetuple.tm_mday, num2mon[datetuple.tm_mon], datetuple.tm_year, \
              datetuple.tm_hour, datetuple.tm_min, datetuple.tm_sec, offset_h, offset_m)
 
+        self.ui.debug('imap', "Internaldate is {}".format(internaldate))
         return internaldate
 
     # Interface from BaseFolder
